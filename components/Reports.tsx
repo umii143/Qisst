@@ -19,51 +19,50 @@ export const Reports: React.FC<ReportsProps> = ({ members, cycles, payments, set
   const stats = useMemo(() => {
     const now = new Date();
     
-    // Helper to get start of day in local time for comparison
-    const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    
-    const startOfToday = startOfDay(now);
+    // Use ISO strings for reliable date-only comparison
+    const getYYYYMMDD = (date: Date) => date.toISOString().split('T')[0];
+    const todayStr = getYYYYMMDD(now);
     
     // Start of week (Sunday)
     const sunday = new Date(now);
     sunday.setDate(now.getDate() - now.getDay());
-    const startOfWeek = startOfDay(sunday);
+    const startOfWeekStr = getYYYYMMDD(sunday);
     
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    // Start of month
+    const startOfMonthStr = getYYYYMMDD(new Date(now.getFullYear(), now.getMonth(), 1));
 
     let filteredCycles = cycles;
     if (period === 'TODAY') {
-      filteredCycles = cycles.filter(c => startOfDay(new Date(c.startDate)) === startOfToday);
+      filteredCycles = cycles.filter(c => c.startDate.split('T')[0] === todayStr);
     } else if (period === 'WEEK') {
-      filteredCycles = cycles.filter(c => startOfDay(new Date(c.startDate)) >= startOfWeek);
+      filteredCycles = cycles.filter(c => c.startDate.split('T')[0] >= startOfWeekStr);
     } else if (period === 'MONTH') {
-      filteredCycles = cycles.filter(c => startOfDay(new Date(c.startDate)) >= startOfMonth);
+      filteredCycles = cycles.filter(c => c.startDate.split('T')[0] >= startOfMonthStr);
     }
 
     const cycleIds = filteredCycles.map(c => c.id);
     const periodPayments = payments.filter(p => cycleIds.includes(p.cycleId));
     
-    // Total instances expected (Members * Active cycles in this period)
     const totalExpectedInstances = members.length * filteredCycles.length;
-    
     const totalPaidCount = periodPayments.filter(p => p.status === 'PAID').length;
     const totalUnpaidCount = totalExpectedInstances - totalPaidCount;
     
-    // For listing people:
-    // If multiple cycles, a member is in 'Paid' list if they paid for ALL selected cycles
-    // or we can show them based on the latest cycle in the filtered set.
-    // Let's go with the most recent cycle in the filtered set for simplicity of "Who paid today"
-    const latestCycleInPeriod = filteredCycles[0]; // Assuming cycles is sorted newest first
+    // For the list view, we show based on the active cycles in the period
+    // If TODAY is selected, we look at the cycle(s) created today
+    const activeCycleIdsForList = new Set(cycleIds);
     
     let paidList: Member[] = [];
     let unpaidList: Member[] = [];
 
-    if (latestCycleInPeriod) {
+    if (filteredCycles.length > 0) {
+      // For "Who is paid" in this period:
+      // We'll show members who have paid for at least one of the cycles in the period
       const paidMemberIds = new Set(
-        payments
-          .filter(p => p.cycleId === latestCycleInPeriod.id && p.status === 'PAID')
+        periodPayments
+          .filter(p => p.status === 'PAID')
           .map(p => p.memberId)
       );
+
       paidList = members.filter(m => paidMemberIds.has(m.id));
       unpaidList = members.filter(m => !paidMemberIds.has(m.id));
     }
@@ -209,3 +208,4 @@ export const Reports: React.FC<ReportsProps> = ({ members, cycles, payments, set
     </div>
   );
 };
+
